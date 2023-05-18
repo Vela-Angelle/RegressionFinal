@@ -1,0 +1,61 @@
+---
+title: "Final Project"
+author: "Vela Angelle"
+date: "2022-12-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(lessR)
+library(glmnet)
+style(suggest=FALSE)
+suppressPackageStartupMessages(library(dplyr))
+knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(message=FALSE)
+
+```
+
+# Least Squares regression
+
+
+```{r}
+
+d <- Read("C:/Users/velaa/Desktop/School/Fall22/BTA 516 Linear Regression/final2.xlsx")
+```
+
+```{r}
+head(d, 10)
+```
+
+```{r}
+reg_brief(life ~ school + maln + gov + diet, new_scale="z")
+```
+
+```{r}
+Regression(life ~ school + maln + gov + diet, new_scale="z")
+```
+# Regularization with LASSO
+
+```{r}
+e <- Read("/Users/velaa/Desktop/School/Fall22/BTA 516 Linear Regression/final3.xlsx")
+
+y <- subset(e, select=life) |> scale(center=TRUE, scale=FALSE) |> data.matrix()
+x <- subset(e, select=-life) |> data.matrix()
+```
+
+```{r}
+
+set.seed(123)
+out <- cv.glmnet(x, y, alpha=1, nfolds=10, standardize=TRUE)
+plot(out)
+
+
+```
+
+
+
+
