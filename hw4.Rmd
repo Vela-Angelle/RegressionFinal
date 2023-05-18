@@ -1,0 +1,311 @@
+---
+title: "HW4"
+author: "Vela Angelle"
+output: pdf_document
+date: "2022-10-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, eval=FALSE, include=FALSE}
+library(bookdown); library(rmarkdown); rmarkdown::render("hw4.Rmd")
+```
+
+# a. Use R markdown to create your own description of the model.
+
+# The model is made up of constraints involving different variables, the drones, and the different functions that go into making them. The model has
+
+#been changed to include Eels drones.
+
+| Characteristic | Ants | Bats | Cats | Eels | Available |
+|---------------:|:----:|:----:|:----:|:----:|:---------:|
+|         Profit | \$7  | \$10 | \$5  | \$22 |           |
+|      Machining |  1   |  4   |  2   |  4   |    800    |
+|       Assembly |  3   |  6   |  2   |  8   |    900    |
+|        Testing |  2   |  2   |  1   |  25  |    480    |
+|        Sensors |  2   |  10  |  2   |  16  |   1200    |
+|       Painting |  1   |  1   |  1   |  12  |    500    |  
+
+```{r echo=FALSE}
+library(kableExtra, quietly = TRUE)
+library(ROI, quietly = TRUE)
+library(ROI.plugin.glpk, quietly = TRUE)
+library(ompr, quietly = TRUE)
+library(ompr.roi, quietly = TRUE)
+library(dplyr)
+```
+
+
+# b. Extend the R markdown to show your LP model
+
+$$
+ \begin{split}
+ \begin{aligned}
+    \text{Max  }  & 7\cdot Ants + 12 \cdot Bats + 5 \cdot Cats + 22 \cdot Eels &\text{[Profit]}\\
+    \text{s.t.: } & 1\cdot Ants + 4 \cdot Bats + 2 \cdot Cats + 4 \cdot Eels \leq 800 &\text{[Machining]}\\
+                  & 3\cdot Ants + 6 \cdot Bats + 2 \cdot Cats + 8 \cdot Eels\leq 900 &\text{[Assembly]}\\
+                  & 2\cdot Ants + 2 \cdot Bats + 1 \cdot Cats + 25 \cdot Eels\leq 480 &\text{[Testing]}\\
+                  & 2\cdot Ants + 10 \cdot Bats + 2 \cdot Cats + 16 \cdot Eels \leq 1200 &\text{[Sensors]}\\
+                  & 1\cdot Ants + 1 \cdot Bats + 1 \cdot Cats + 12 \cdot Eels \leq 500 &\text{[Painting]}\\
+                  & Ants, \; Bats, \; Cats, \;Eels \geq 0  &\text{[Non-negativity]}\\
+  \end{aligned}
+  \end{split}
+$$
+
+# C. solve the model in R
+
+```{r echo=FALSE}
+
+#Set up model and variables
+
+Base4VarModel <- MIPModel() |>
+  add_variable(Ants, type = "continuous", lb = 0) |>
+  add_variable(Bats, type = "continuous", lb = 0) |>
+  add_variable(Cats, type = "continuous", lb = 0) |>
+  add_variable(Eels, type = "continuous", lb = 0) |>
+  
+  set_objective(7*Ants + 12*Bats + 5*Cats + 22*Eels,"max")  |>
+  
+  add_constraint(1*Ants + 4*Bats + 2*Cats + 4*Eels<=800)   |> 
+  add_constraint(3*Ants + 6*Bats + 2*Cats + 8*Eels<=900)   |> 
+  add_constraint(2*Ants + 2*Bats + 1*Cats + 25*Eels<=480)   |> 
+  add_constraint(2*Ants + 10*Bats + 2*Cats + 16*Eels<=1200) |> 
+  add_constraint(1*Ants + 1*Bats + 1*Cats + 12*Eels<=500)   |>
+  solve_model(with_ROI(solver="glpk"))
+
+```
+
+```{r}
+
+#solve model
+
+adding_eels <- cbind(objective_value(Base4VarModel),
+                    get_solution(Base4VarModel, Ants),
+                    get_solution(Base4VarModel, Bats),
+                    get_solution(Base4VarModel, Cats),
+                    get_solution(Base4VarModel, Eels))
+colnames(adding_eels)<-list("Profit", "Ants", 
+                              "Bats", "Cats", "Eels")
+rownames(adding_eels)<-list("Adding Eels")
+
+kbl(adding_eels, booktabs=T,
+    caption="Adding Eels Production Plan") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+# calculating shadow prices.
+```{r echo=FALSE}
+
+# Shadow Prices, row duals.
+
+rduals1 <-as.matrix(get_row_duals(Base4VarModel))
+dimnames(rduals1)<-list(c("Machining", "Assembly", 
+                          "Testing", "Sensors", "Painting"), 
+                          c("Row Duals"))
+
+kbl(format(rduals1,digits=4), booktabs=T,
+    caption="Shadow Prices of Constrained Resources") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+
+# d. Interpret and discuss the model in R markdown
+
+# The output from the model suggests that the most optimal production of each drone type is 49.5 Ants, 0 Bats 374.75 Cats and 0.25 Eels. These numbers are not logical because the company doesn't make partial drones. 
+
+# The shadow pricing indicates that nothing would happen to profit if more time was spent on painting or if more Sensors were made because the limit for those have not been reached. 
+
+# Machining would cost $0.29, assembly would cost $2.14, and testing would cost $0.15 for each additional hour because all of the alotted hours are being used in the production plan. 
+# e. Examine and reflect upon the reduced costs and shadow prices from the context of which poducts to produce and not produce. 
+
+```{r echo=FALSE}
+
+# Columb Duals to analyze reduced costs.
+
+cduals1 <-as.matrix(get_column_duals(Base4VarModel) )
+dimnames(cduals1)<-list(c("Ants", "Bats", "Cats", "Eels"), 
+                        c("Column Duals"))
+
+
+kbl(format(cduals1,digits=4), booktabs=T,
+    caption="Reduce Costs of Production Plan") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+
+# The reduced costs of Ants, Cats and Eels are 0, so we don't have to worry about them going over budget and affecting the production plan or profit. The variable to look at are the Bat drones because they have a reduced cost of $-2.275, which means that for every Bat that's made the company will lose that amount of profit. To further explore, an analysis of the shadow prices and the number of each resource a Bat drone uses. 
+
+```{r}
+# Shadow prices and resources used by Bats. 
+
+bats_res_used<-cbind(rduals1,c(4,6,2,10,1))
+colnames(bats_res_used)<-c("Row Duals", "Resources Used")
+bats_res_used <- rbind(bats_res_used,
+                      c("TOTAL",t(rduals1)%*%c(4,6,2,10,1)))
+
+
+kbl(format(bats_res_used, digits=4), booktabs=T,
+    caption="Resources Used by a Bat and shadow prices of resources")
+
+
+```
+# The marginal value of the resources used by Bats is $14.26, and the profit of a single Bat drone is $10. If I had to choose a drone to cut from production it would be this one. 
+
+# f. using the results from e) make one change to the base model's objective function that will change the production plan. rerun and discuss the new results. 
+
+# Change the objective function to not include bats. 
+
+
+```{r echo=FALSE}
+
+#Set up model and variables with Bats removed.
+
+NoBatsModel <- MIPModel() |>
+  add_variable(Ants, type = "continuous", lb = 0) |>
+  add_variable(Cats, type = "continuous", lb = 0) |>
+  add_variable(Eels, type = "continuous", lb = 0) |>
+  
+  set_objective(7*Ants + 5*Cats + 22*Eels,"max")  |>
+  
+  add_constraint(1*Ants + 2*Cats + 4*Eels<=800)   |> 
+  add_constraint(3*Ants + 2*Cats + 8*Eels<=900)   |> 
+  add_constraint(2*Ants + 1*Cats + 25*Eels<=480)   |> 
+  add_constraint(2*Ants + 2*Cats + 16*Eels<=1200) |> 
+  add_constraint(1*Ants + 1*Cats + 12*Eels<=500)   |>
+  solve_model(with_ROI(solver="glpk"))
+
+```
+
+```{r echo=FALSE}
+
+#solve model with bats removed
+
+removing_bats <- cbind(objective_value(NoBatsModel),
+                    get_solution(NoBatsModel, Ants),
+                    get_solution(NoBatsModel, Cats),
+                    get_solution(NoBatsModel, Eels))
+colnames(removing_bats)<-list("Profit", "Ants", 
+                                  "Cats", "Eels")
+rownames(removing_bats)<-list("Removing Bats")
+
+kbl(removing_bats, booktabs=T,
+    caption="Removing Bats Production Plan") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+# If Bats are removed and the model rerun for best production plan in terms of profit, then everything stays the same beacuse Bats were zero in the base model.
+
+# g. Using the results from e), make one change to the base model's resource usage values that will change the production plan. Rerun and discuss new results. 
+
+# Based on e, the change I'll make is I'll force the production plan to include the making of 1 Eel drone. 
+
+```{r echo=FALSE}
+
+#Forcing the model to create 1 Bat. 
+
+OneBatModel <- MIPModel() |>
+  add_variable(Ants, type = "continuous", lb = 0) |>
+  add_variable(Bats, type = "continuous", lb = 1) |>
+  add_variable(Cats, type = "continuous", lb = 0) |>
+  add_variable(Eels, type = "continuous", lb = 0) |>
+  
+  set_objective(7*Ants + 12*Bats + 5*Cats + 22*Eels,"max")  |>
+  
+  add_constraint(1*Ants + 4*Bats + 2*Cats + 4*Eels<=800)   |> 
+  add_constraint(3*Ants + 6*Bats + 2*Cats + 8*Eels<=900)   |> 
+  add_constraint(2*Ants + 2*Bats + 1*Cats + 25*Eels<=480)   |> 
+  add_constraint(2*Ants + 10*Bats + 2*Cats + 16*Eels<=1200) |> 
+  add_constraint(1*Ants + 1*Bats + 1*Cats + 12*Eels<=500)   |>
+  solve_model(with_ROI(solver="glpk"))
+
+```
+
+```{r echo=FALSE}
+
+#solving One Bat model
+
+one_bat <- cbind(objective_value(OneBatModel),
+                    get_solution(OneBatModel, Ants),
+                    get_solution(OneBatModel, Bats),
+                    get_solution(OneBatModel, Cats),
+                    get_solution(OneBatModel, Eels))
+colnames(one_bat)<-list("Profit", "Ants", 
+                              "Bats", "Cats", "Eels")
+rownames(one_bat)<-list("only 1 bat")
+
+kbl(one_bat, booktabs=T,
+    caption="Production Plan With 1 Bat") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+
+# Forcing the production plan to include the making of 1 Bat drone caused the overall profit to drop from $2,225.75 to $2,223.46, this is to be expected because of the reduction cost associated with creating bats that we found in e. The production of Ants and Cats went down some and Eels increased. 
+
+# h. Using the results from e) make one change to the base model's available resources values that will change the production plan. refurn and discuss the new results. 
+
+# Since the marginal value is 14 and change, but the profit for Bats is 10, I'm going to increase the number of hours for each resource by 2 and the number of sensors by 5. 
+
+```{r echo=FALSE}
+
+#Set up model and variables for more resources model. 
+
+MoreResModel <- MIPModel() |>
+  add_variable(Ants, type = "continuous", lb = 0) |>
+  add_variable(Bats, type = "continuous", lb = 0) |>
+  add_variable(Cats, type = "continuous", lb = 0) |>
+  add_variable(Eels, type = "continuous", lb = 0) |>
+  
+  set_objective(7*Ants + 12*Bats + 5*Cats + 22*Eels,"max")  |>
+  
+  add_constraint(1*Ants + 4*Bats + 2*Cats + 4*Eels<=802)   |> 
+  add_constraint(3*Ants + 6*Bats + 2*Cats + 8*Eels<=902)   |> 
+  add_constraint(2*Ants + 2*Bats + 1*Cats + 25*Eels<=482)   |> 
+  add_constraint(2*Ants + 10*Bats + 2*Cats + 16*Eels<=1205) |> 
+  add_constraint(1*Ants + 1*Bats + 1*Cats + 12*Eels<=502)   |>
+  solve_model(with_ROI(solver="glpk"))
+
+```
+
+```{r echo=FALSE}
+
+#solve more resources model
+
+more_res <- cbind(objective_value(MoreResModel),
+                    get_solution(MoreResModel, Ants),
+                    get_solution(MoreResModel, Bats),
+                    get_solution(MoreResModel, Cats),
+                    get_solution(MoreResModel, Eels))
+colnames(more_res)<-list("Profit", "Ants", 
+                              "Bats", "Cats", "Eels")
+rownames(more_res)<-list("Adding Eels")
+
+kbl(more_res, booktabs=T,
+    caption="Adding More Resources to the Production Plan") |>
+  kable_styling(latex_options = "hold_position")
+
+```
+
+# That is surprising.Adding more available resources incrased profits from $2,225.75 to $2,230.90. The numebr of Bats stayed the same, 0, but the production numbers of the other drones changed a bit. 
+
+# i. Combine the results of the base case e), as well as the variations f) trhough h) into a single table and discuss results. 
+
+```{r echo=FALSE}
+table <- rbind(adding_eels[,1:5], one_bat, more_res)
+
+colnames(table)<-list("Profit", "Ants", 
+                              "Bats", "Cats", "Eels")
+rownames(table)<-list("Adding Eels","One Bat","More Resources")
+kbl(table, booktabs=T,
+    caption="Joined Table of Possible Production Plans") |>
+  kable_styling(latex_options = "hold_position")
+```
+
+# I left out the table for Removing Bats because it's the same as the base model, Adding Eels. 
+
+
+# The Profit is highest with the more resources production plan. The production units are in fractions, which isn't practical for this situation because drones (I'm assuming) at the factory are not made in parts for consumers, but as whole individual units. 
+
+# Though, for varieties sake I would probably come up with a different production plan to include the best possible profit, AND creating a certain amount of Bat drones. 

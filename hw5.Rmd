@@ -1,0 +1,172 @@
+---
+title: "hw5"
+author: "Vela Angelle"
+date: "2022-11-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, eval=FALSE, include=FALSE}
+library(bookdown); library(rmarkdown); rmarkdown::render("hw5.Rmd")
+```
+
+
+```{r echo=FALSE}
+library(kableExtra, quietly = TRUE)
+library(ROI, quietly = TRUE)
+library(ROI.plugin.glpk, quietly = TRUE)
+library(ompr, quietly = TRUE)
+library(ompr.roi, quietly = TRUE)
+library(dplyr, quietly = TRUE)
+library(TRA)
+library(rsvg)
+library(DiagrammeR)
+library(DiagrammeRsvg)
+library(Benchmarking, quietly=TRUE)
+library(readr)
+
+```
+
+
+# a. The dataset consists of metrics taken from different countries such as GDP per person and literacy percentage. I'm to compare how well the countries are doing in comparison to each other based on certain metrics. 
+
+
+# b. For the input, I'm using GDP per person and the output is literacy and infant survival to measure 'how well' a country is doing. GDP per person is a resource that can be used by funding education (to increase literacy) and healthcare (to increase infant survival). I'm only using the first 25 rows of data, the first 24 countries, to simplify the data. In simplifying the data that means the only countries that are a part of the sample begin with the letter A or B.
+
+# I removed the last column of data, infant mortality rate, because I created another field called Infant Survival, which is based off the infant mortality rate. Infant moretality is deaths per 1000 births, so I subtracted the death rate from 1000 to find the infant survival rate. Looking at the rates in terms of a positive, survival instead of death, has a positive relationship similar to literacy - higher rates of survival indicate better conditions, and lower rates of survival indicate poorer conditions. 
+
+```{r echo=FALSE, show_col_types=FALSE}
+
+# upload data
+
+countries <- read_csv("C:/Users/velaa/Documents/540 hw/countriesA.csv", show_col_types=FALSE)
+
+# library(readr)
+# countriesA <- read_csv("C:/Users/velaa/Documents/540 hw/countriesA.csv", 
+#    locale = locale(decimal_mark = ",", grouping_mark = "."))
+# View(countriesA)
+
+```
+
+# Data table
+
+```{r echo=FALSE}
+
+# table of data
+
+colnames(countries) <- c("Country", "GDP", "Literacy","Infant Survival","Infant Mortality")
+
+metrics2017 <- countries [1:24,] # Use first 24 countries
+
+metrics2017 <- metrics2017 [,-(5)] # Drop the 5th col
+
+
+
+kbl (head(metrics2017), booktabs=T, 
+     caption="Simplified Data for Country Metrics") |>
+  kable_styling(latex_options = "hold_position")
+```
+
+# Diagram of inputs and outputs
+
+```{r echo=FALSE}
+
+# Diagram 
+
+Figure <- DrawIOdiagram (c("GDP\n(per person)" ), 
+                         c("Literacy \n (%)", "Infant Survival \n (per 1000 births)"), 
+                        '"\nCountry\n\n"')
+tmp<-capture.output(rsvg_png(
+  charToRaw(export_svg(Figure)),
+  'C:/Users/velaa/Documents/540 hw/DEA_Country_IO.PNG'))
+knitr::include_graphics(
+  "C:/Users/velaa/Documents/540 hw/DEA_Country_IO.PNG")
+
+```
+
+# Table rearranged in terms of inputs and outputs. 
+
+
+```{r echo=FALSE}
+
+# Preparing data
+
+xdata <- as.matrix(metrics2017 [,2])
+rownames(xdata)<-as.matrix(metrics2017[,1])
+
+ydata <- as.matrix(metrics2017 [,3:4])
+rownames(ydata)<-as.matrix(metrics2017[,1])
+
+Xnames <- colnames(xdata)
+Ynames <- colnames(ydata)
+DMUnames <-list(as.matrix(metrics2017[,1]))
+
+dimnames(xdata)              <- c(DMUnames,Xnames)
+colnames(ydata)              <- Ynames
+
+ND <- nrow(xdata)  # Number of DMUs (countries)
+NX <- ncol(xdata)  # Number of inputs (just 1 in this case)
+NY <- ncol(ydata)  # Number of outputs
+
+res.efficiency <- matrix(rep(-1.0, ND), nrow=ND, ncol=1)
+res.lambda     <- matrix(rep(-1.0, ND^2), nrow=ND,ncol=ND)
+dimnames(res.efficiency) <- c(DMUnames,"CCR-IO")
+dimnames(res.lambda)     <- c(DMUnames,DMUnames)
+
+#Define printable names to be used as appropriate
+ynames_printable<-c("Literacy\n(%)", 
+                    "Infant Survival \n(per 1,000 births)")
+xnames_printable<-c("GDP \n (per person)")
+DMUnames_printable <- as.matrix(metrics2017[,1])
+
+kbl (head(cbind(xdata,ydata)), booktabs=T, 
+     caption="Selected Countries and Metrics.")
+
+```
+
+# c. the DEA that I've chosen is a constant retern to scale model. I'm asking for leniencey on this part of the grading. I originally did 1 input and 1 output, but the professor instructed me to use something more complicated. The example in the book, in 5.7, used a certain dataset. The book said it could be accessed through a link provided in the section. The dataset was not there. I informed him of this and he said he would correct that. I could not follow along with this example and had to solve my model without having done it before. Most of the code works except for the last part, the knitting part, after the RTS solver. The results are not printing in a way that I understand. I met with the teacher for gudience but he was not able to help me. 
+
+```{r}
+
+# Solving
+
+RTS<-"CRS"
+for (k in 1:ND) {
+  
+  modUTT_CCR <- MIPModel() |>
+    add_variable(vlambda[j], j = 1:ND, type = "continuous", 
+                 lb = 0) |>
+    add_variable(vtheta, type = "continuous") |>
+    set_objective(vtheta, "min") |>
+    add_constraint(sum_expr(vlambda[j] * xdata[j,i], j = 1:ND) 
+                   <= vtheta * xdata[k,i], i = 1:NX, 
+                   .show_progress_bar=FALSE ) |>
+    add_constraint(sum_expr(vlambda[j] * ydata[j,r], j = 1:ND) 
+                   >= ydata[k,r], r = 1:NY, 
+                   .show_progress_bar=FALSE ) 
+    if (RTS=="VRS") {result <- add_constraint(result, 
+                 sum_expr(vlambda[j],j = 1:ND) == 1) }  
+        #Returns to Scale
+  res <- solve_model(modUTT_CCR, with_ROI(solver = "glpk")) 
+    
+  res.efficiency[k] <-  get_solution(res, vtheta)       
+  res.lambda[k,] <- t(as.matrix(as.numeric(
+                     get_solution(res, vlambda[j])[,3] )))
+}
+```
+
+```{r eval=FALSE}
+kbl (cbind(res.efficiency, poscol(res.lambda)),
+     booktabs=T, digits=4, escape=F,
+     col.names = c("$\\theta^{CRS}$", "$\\lambda_{\\text{NYU}}$",
+                   "$\\lambda_{\\text{UW-Madison}}$"),
+     caption="Results from Countries (CRS)") |>
+  kable_styling(latex_options = 
+                  c("hold_position", "scale_down"))
+```
+
+# d. In terms of discussing the results, since I can't get the results to show in a meaninful way I am not able to include much of a discussion. I had wanted to to a constant return to scale to compare the countries in how much each area would have to improve to do as well as the other countries. 
+
